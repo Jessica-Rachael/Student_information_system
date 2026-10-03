@@ -1,0 +1,12 @@
+{
+  "name": "student-information-system",
+  "version": "1.0.0",
+  "description": "Student Information System website - Node.js with built-in SQLite database",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --no-warnings server.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
