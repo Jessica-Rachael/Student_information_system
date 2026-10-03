@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Profile - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <section class="card">
+          <h2>Personal details</h2>
+          <div class="error-msg" id="error" role="alert"></div>
+          <form id="profileForm">
+            <div class="form-grid">
+              <div class="field"><label for="sid">Student ID</label><input id="sid" readonly></div>
+              <div class="field"><label for="email">Email</label><input id="email" readonly></div>
+              <div class="field"><label for="name">Full name</label><input id="name" name="name" required></div>
+              <div class="field"><label for="phone">Phone</label><input type="tel" id="phone" name="phone"></div>
+              <div class="field"><label for="dob">Date of birth</label><input type="date" id="dob" name="dob"></div>
+              <div class="field"><label for="department_id">Department</label><select id="department_id" name="department_id"></select></div>
+              <div class="field"><label for="program">Program</label><input id="program" name="program"></div>
+              <div class="field"><label for="address">Address</label><input id="address" name="address"></div>
+            </div>
+            <div class="form-actions"><button class="btn btn-primary" type="submit">Save changes</button></div>
+          </form>
+          <p class="muted small" id="joined"></p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    (async () => {
+      await initPage('student', 'My Profile');
+      const [p, depts] = await Promise.all([api('GET', '/api/student/profile'), api('GET', '/api/departments')]);
+      fillSelect(document.getElementById('department_id'), depts, 'Not selected');
+
+      document.getElementById('sid').value = 'STU' + String(p.id).padStart(4, '0');
+      document.getElementById('email').value = p.email;
+      for (const key of ['name', 'phone', 'dob', 'program', 'address', 'department_id']) {
+        document.getElementById(key).value = p[key] ?? '';
+      }
+      document.getElementById('joined').textContent = 'Account created on ' + fmtDateTime(p.created_at);
+
+      document.getElementById('profileForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        document.getElementById('error').textContent = '';
+        try {
+          await api('PUT', '/api/student/profile', formData(e.target));
+          toast('Profile saved.');
+        } catch (err) {
+          document.getElementById('error').textContent = err.message;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

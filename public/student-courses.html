@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Courses - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-panel="catalogPanel" role="tab" aria-selected="true">Course catalog</button>
+          <button class="tab" data-panel="myPanel" role="tab" aria-selected="false">My enrollments</button>
+        </div>
+
+        <section class="card tab-panel" id="catalogPanel">
+          <div class="toolbar">
+            <div class="field">
+              <label for="search">Search courses</label>
+              <input id="search" placeholder="Course code or name">
+            </div>
+            <div class="field">
+              <label for="semesterFilter">Semester</label>
+              <select id="semesterFilter"><option value="">All semesters</option></select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Code</th><th>Course name</th><th>Credits</th><th>Semester</th><th>Department</th><th>Faculty</th><th></th></tr></thead>
+              <tbody id="catalogBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card tab-panel" id="myPanel" hidden>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Code</th><th>Course name</th><th>Credits</th><th>Faculty</th><th>Requested on</th><th>Status</th><th></th></tr></thead>
+              <tbody id="myBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    let courses = [];
+
+    function renderCatalog() {
+      const q = document.getElementById('search').value.trim().toLowerCase();
+      const sem = document.getElementById('semesterFilter').value;
+      const rows = courses.filter((c) =>
+        (!q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)) &&
+        (!sem || String(c.semester) === sem));
+
+      const body = document.getElementById('catalogBody');
+      if (courses.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">No courses have been added yet. The administrator adds courses.</td></tr>';
+        return;
+      }
+      if (rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">No courses match your search.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map((c) => {
+        let action;
+        if (!c.faculty) action = '<span class="muted small">Enrollment not open</span>';
+        else if (!c.status) action = `<button class="btn btn-primary btn-sm" data-enroll="${c.id}">Enroll</button>`;
+        else if (c.status === 'rejected') action = `${badge('rejected')} <button class="btn btn-secondary btn-sm" data-enroll="${c.id}">Request again</button>`;
+        else action = badge(c.status);
+        return `<tr>
+          <td><strong>${esc(c.code)}</strong></td><td>${esc(c.name)}</td><td>${c.credits}</td><td>${c.semester}</td>
+          <td>${esc(c.department) || '<span class="muted">-</span>'}</td>
+          <td>${esc(c.faculty) || '<span class="muted">Not assigned</span>'}</td>
+          <td class="actions">${action}</td></tr>`;
+      }).join('');
+    }
+
+    async function loadMine() {
+      const rows = await api('GET', '/api/student/enrollments');
+      const body = document.getElementById('myBody');
+      if (rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">You have not requested any course yet. Use the Course catalog tab to enroll.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map((e) => `<tr>
+        <td><strong>${esc(e.code)}</strong></td><td>${esc(e.name)}</td><td>${e.credits}</td>
+        <td>${esc(e.faculty) || '-'}</td><td>${fmtDateTime(e.enrolled_at)}</td><td>${badge(e.status)}</td>
+        <td class="actions"><button class="btn btn-danger btn-sm" data-drop="${e.id}" data-code="${esc(e.code)}">
+          ${e.status === 'pending' ? 'Cancel request' : e.status === 'rejected' ? 'Remove' : 'Drop course'}</button></td></tr>`).join('');
+    }
+
+    async function loadCatalog() {
+      courses = await api('GET', '/api/student/courses');
+      const semesters = [...new Set(courses.map((c) => c.semester))].sort((a, b) => a - b);
+      const sel = document.getElementById('semesterFilter');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">All semesters</option>' + semesters.map((s) => `<option value="${s}">Semester ${s}</option>`).join('');
+      sel.value = current;
+      renderCatalog();
+    }
+
+    (async () => {
+      await initPage('student', 'Courses');
+      setupTabs();
+      await Promise.all([loadCatalog(), loadMine()]);
+
+      document.getElementById('search').addEventListener('input', renderCatalog);
+      document.getElementById('semesterFilter').addEventListener('change', renderCatalog);
+
+      document.getElementById('catalogBody').addEventListener('click', async (e) => {
+        const id = e.target.dataset.enroll;
+        if (!id) return;
+        e.target.disabled = true;
+        try {
+          const res = await api('POST', '/api/student/enrollments', { course_id: Number(id) });
+          toast(res.message);
+          await Promise.all([loadCatalog(), loadMine()]);
+        } catch (err) {
+          toast(err.message, true);
+          e.target.disabled = false;
+        }
+      });
+
+      document.getElementById('myBody').addEventListener('click', async (e) => {
+        const id = e.target.dataset.drop;
+        if (!id) return;
+        if (!confirm(`Remove your enrollment for ${e.target.dataset.code}?`)) return;
+        try {
+          const res = await api('DELETE', `/api/student/enrollments/${id}`);
+          toast(res.message);
+          await Promise.all([loadCatalog(), loadMine()]);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

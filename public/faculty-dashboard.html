@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <p id="welcome" class="muted"></p>
+        <div class="stats">
+          <div class="stat"><div class="label">Courses teaching</div><div class="value" id="sCourses">-</div></div>
+          <div class="stat"><div class="label">Enrolled students</div><div class="value" id="sStudents">-</div></div>
+          <div class="stat"><div class="label">Pending requests</div><div class="value" id="sPending">-</div></div>
+        </div>
+
+        <section class="card">
+          <h2>Enrollment requests</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Student</th><th>Email</th><th>Program</th><th>Course</th><th>Requested on</th><th></th></tr></thead>
+              <tbody id="reqBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>My courses</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Code</th><th>Course name</th><th>Semester</th><th>Credits</th><th>Enrolled</th><th>Pending</th><th></th></tr></thead>
+              <tbody id="courseBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" id="rosterCard" hidden>
+          <div class="card-head">
+            <h2 id="rosterTitle">Students</h2>
+            <button class="btn btn-secondary btn-sm" id="closeRoster">Close</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Email</th><th>Program</th></tr></thead>
+              <tbody id="rosterBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" id="notifications">
+          <div class="card-head">
+            <h2>Notifications</h2>
+            <button class="btn btn-secondary btn-sm" id="readAll">Mark all as read</button>
+          </div>
+          <ul class="list" id="notifList"></ul>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    let courses = [];
+
+    async function load() {
+      const d = await api('GET', '/api/faculty/dashboard');
+      courses = d.courses;
+      document.getElementById('sCourses').textContent = d.courses.length;
+      document.getElementById('sStudents').textContent = d.courses.reduce((s, c) => s + c.approved, 0);
+      document.getElementById('sPending').textContent = d.requests.length;
+
+      document.getElementById('reqBody').innerHTML = d.requests.length === 0
+        ? '<tr><td colspan="6" class="empty">No pending requests.</td></tr>'
+        : d.requests.map((r) => `<tr>
+            <td>${esc(r.student)}</td><td>${esc(r.email)}</td><td>${esc(r.program) || '-'}</td>
+            <td><strong>${esc(r.code)}</strong> ${esc(r.course)}</td><td>${fmtDateTime(r.enrolled_at)}</td>
+            <td class="actions">
+              <button class="btn btn-success btn-sm" data-id="${r.id}" data-action="approve">Approve</button>
+              <button class="btn btn-danger btn-sm" data-id="${r.id}" data-action="reject">Reject</button>
+            </td></tr>`).join('');
+
+      document.getElementById('courseBody').innerHTML = d.courses.length === 0
+        ? '<tr><td colspan="7" class="empty">No courses are assigned to you yet. The administrator assigns courses.</td></tr>'
+        : d.courses.map((c) => `<tr>
+            <td><strong>${esc(c.code)}</strong></td><td>${esc(c.name)}</td><td>${c.semester}</td><td>${c.credits}</td>
+            <td>${c.approved}</td><td>${c.pending}</td>
+            <td class="actions"><button class="btn btn-secondary btn-sm" data-roster="${c.id}">View students</button></td></tr>`).join('');
+    }
+
+    (async () => {
+      const me = await initPage('faculty', 'Dashboard');
+      document.getElementById('welcome').textContent = `Welcome, ${me.name}.`;
+      await load();
+      await loadNotifications(document.getElementById('notifList'), 'No notifications yet.');
+
+      document.getElementById('reqBody').addEventListener('click', async (e) => {
+        const { id, action } = e.target.dataset;
+        if (!id) return;
+        try {
+          const res = await api('POST', `/api/faculty/enrollments/${id}/${action}`);
+          toast(res.message);
+          await load();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+
+      document.getElementById('courseBody').addEventListener('click', async (e) => {
+        const id = e.target.dataset.roster;
+        if (!id) return;
+        const course = courses.find((c) => String(c.id) === id);
+        const students = await api('GET', `/api/faculty/courses/${id}/students`);
+        document.getElementById('rosterTitle').textContent = `Students in ${course.code} - ${course.name}`;
+        document.getElementById('rosterBody').innerHTML = students.length === 0
+          ? '<tr><td colspan="3" class="empty">No approved students in this course yet.</td></tr>'
+          : students.map((s) => `<tr><td>${esc(s.name)}</td><td>${esc(s.email)}</td><td>${esc(s.program) || '-'}</td></tr>`).join('');
+        const card = document.getElementById('rosterCard');
+        card.hidden = false;
+        card.scrollIntoView({ behavior: 'smooth' });
+      });
+      document.getElementById('closeRoster').addEventListener('click', () => { document.getElementById('rosterCard').hidden = true; });
+
+      document.getElementById('readAll').addEventListener('click', async () => {
+        await api('POST', '/api/notifications/read-all');
+        location.reload();
+      });
+    })();
+  </script>
+</body>
+</html>

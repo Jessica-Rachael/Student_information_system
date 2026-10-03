@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Departments & Courses - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-panel="deptPanel" role="tab" aria-selected="true">Departments</button>
+          <button class="tab" data-panel="coursePanel" role="tab" aria-selected="false">Courses</button>
+        </div>
+
+        <!-- Departments -->
+        <div class="tab-panel" id="deptPanel">
+          <section class="card">
+            <h2 id="deptFormTitle">Add a department</h2>
+            <div class="error-msg" id="deptError" role="alert"></div>
+            <form id="deptForm">
+              <input type="hidden" name="id">
+              <div class="form-grid">
+                <div class="field"><label for="deptName">Department name</label><input id="deptName" name="name" required></div>
+                <div class="field"><label for="deptHod">Head of department</label><input id="deptHod" name="hod"></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit" id="deptSubmit">Add department</button>
+                <button class="btn btn-secondary" type="button" id="deptCancel" hidden>Cancel editing</button>
+              </div>
+            </form>
+          </section>
+          <section class="card">
+            <h2>All departments</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Head of department</th><th>Courses</th><th>Students</th><th></th></tr></thead>
+                <tbody id="deptBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <!-- Courses -->
+        <div class="tab-panel" id="coursePanel" hidden>
+          <section class="card">
+            <h2 id="courseFormTitle">Add a course</h2>
+            <div class="error-msg" id="courseError" role="alert"></div>
+            <form id="courseForm">
+              <input type="hidden" name="id">
+              <div class="form-grid">
+                <div class="field"><label for="code">Course code</label><input id="code" name="code" required></div>
+                <div class="field"><label for="cname">Course name</label><input id="cname" name="name" required></div>
+                <div class="field"><label for="credits">Credits (1-10)</label><input type="number" id="credits" name="credits" min="1" max="10" required></div>
+                <div class="field"><label for="semester">Semester (1-8)</label><input type="number" id="semester" name="semester" min="1" max="8" required></div>
+                <div class="field"><label for="cdept">Department</label><select id="cdept" name="department_id"></select></div>
+                <div class="field"><label for="faculty">Faculty</label><select id="faculty" name="faculty_id"></select></div>
+              </div>
+              <p class="muted small">Students can enroll only after a faculty member is assigned to the course.</p>
+              <div class="form-actions">
+                <button class="btn btn-primary" type="submit" id="courseSubmit">Add course</button>
+                <button class="btn btn-secondary" type="button" id="courseCancel" hidden>Cancel editing</button>
+              </div>
+            </form>
+          </section>
+          <section class="card">
+            <h2>All courses</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Code</th><th>Name</th><th>Credits</th><th>Semester</th><th>Department</th><th>Faculty</th><th>Enrolled</th><th></th></tr></thead>
+                <tbody id="courseBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    let departments = [];
+    let courses = [];
+
+    // ---------- departments ----------
+    function resetDeptForm() {
+      const f = document.getElementById('deptForm');
+      f.reset();
+      f.elements.id.value = '';
+      document.getElementById('deptFormTitle').textContent = 'Add a department';
+      document.getElementById('deptSubmit').textContent = 'Add department';
+      document.getElementById('deptCancel').hidden = true;
+      document.getElementById('deptError').textContent = '';
+    }
+
+    async function loadDepartments() {
+      departments = await api('GET', '/api/admin/departments');
+      document.getElementById('deptBody').innerHTML = departments.length === 0
+        ? '<tr><td colspan="5" class="empty">No departments yet. Add the first one above.</td></tr>'
+        : departments.map((d) => `<tr><td><strong>${esc(d.name)}</strong></td><td>${esc(d.hod) || '-'}</td>
+            <td>${d.courses}</td><td>${d.students}</td>
+            <td class="actions"><button class="btn btn-secondary btn-sm" data-edit="${d.id}">Edit</button>
+              <button class="btn btn-danger btn-sm" data-delete="${d.id}">Delete</button></td></tr>`).join('');
+      fillSelect(document.getElementById('cdept'), departments, 'Not selected');
+    }
+
+    // ---------- courses ----------
+    function resetCourseForm() {
+      const f = document.getElementById('courseForm');
+      f.reset();
+      f.elements.id.value = '';
+      document.getElementById('courseFormTitle').textContent = 'Add a course';
+      document.getElementById('courseSubmit').textContent = 'Add course';
+      document.getElementById('courseCancel').hidden = true;
+      document.getElementById('courseError').textContent = '';
+    }
+
+    async function loadCourses() {
+      courses = await api('GET', '/api/admin/courses');
+      document.getElementById('courseBody').innerHTML = courses.length === 0
+        ? '<tr><td colspan="8" class="empty">No courses yet. Add the first one above.</td></tr>'
+        : courses.map((c) => `<tr><td><strong>${esc(c.code)}</strong></td><td>${esc(c.name)}</td><td>${c.credits}</td><td>${c.semester}</td>
+            <td>${esc(c.department) || '-'}</td><td>${esc(c.faculty) || '<span class="badge badge-pending">Not assigned</span>'}</td><td>${c.enrolled}</td>
+            <td class="actions"><button class="btn btn-secondary btn-sm" data-edit="${c.id}">Edit</button>
+              <button class="btn btn-danger btn-sm" data-delete="${c.id}">Delete</button></td></tr>`).join('');
+    }
+
+    async function loadFaculty() {
+      const faculty = await api('GET', '/api/admin/users?role=faculty');
+      fillSelect(document.getElementById('faculty'), faculty, faculty.length ? 'Not assigned' : 'No faculty accounts yet');
+    }
+
+    (async () => {
+      await initPage('admin', 'Departments & Courses');
+      setupTabs();
+      await Promise.all([loadDepartments(), loadCourses(), loadFaculty()]);
+
+      // department form
+      document.getElementById('deptForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = formData(e.target);
+        try {
+          const res = data.id
+            ? await api('PUT', `/api/admin/departments/${data.id}`, data)
+            : await api('POST', '/api/admin/departments', data);
+          toast(res.message);
+          resetDeptForm();
+          await Promise.all([loadDepartments(), loadCourses()]);
+        } catch (err) {
+          document.getElementById('deptError').textContent = err.message;
+        }
+      });
+      document.getElementById('deptCancel').addEventListener('click', resetDeptForm);
+      document.getElementById('deptBody').addEventListener('click', async (e) => {
+        const { edit, delete: del } = e.target.dataset;
+        if (edit) {
+          const d = departments.find((x) => String(x.id) === edit);
+          const f = document.getElementById('deptForm');
+          f.elements.id.value = d.id;
+          f.elements.name.value = d.name;
+          f.elements.hod.value = d.hod || '';
+          document.getElementById('deptFormTitle').textContent = `Edit ${d.name}`;
+          document.getElementById('deptSubmit').textContent = 'Save changes';
+          document.getElementById('deptCancel').hidden = false;
+          f.scrollIntoView({ behavior: 'smooth' });
+        }
+        if (del) {
+          const d = departments.find((x) => String(x.id) === del);
+          if (!confirm(`Delete ${d.name}? Its courses and students stay, but will no longer have a department.`)) return;
+          try {
+            toast((await api('DELETE', `/api/admin/departments/${del}`)).message);
+            await Promise.all([loadDepartments(), loadCourses()]);
+          } catch (err) { toast(err.message, true); }
+        }
+      });
+
+      // course form
+      document.getElementById('courseForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = formData(e.target);
+        try {
+          const res = data.id
+            ? await api('PUT', `/api/admin/courses/${data.id}`, data)
+            : await api('POST', '/api/admin/courses', data);
+          toast(res.message);
+          resetCourseForm();
+          await Promise.all([loadCourses(), loadDepartments()]);
+        } catch (err) {
+          document.getElementById('courseError').textContent = err.message;
+        }
+      });
+      document.getElementById('courseCancel').addEventListener('click', resetCourseForm);
+      document.getElementById('courseBody').addEventListener('click', async (e) => {
+        const { edit, delete: del } = e.target.dataset;
+        if (edit) {
+          const c = courses.find((x) => String(x.id) === edit);
+          const f = document.getElementById('courseForm');
+          f.elements.id.value = c.id;
+          f.elements.code.value = c.code;
+          f.elements.name.value = c.name;
+          f.elements.credits.value = c.credits;
+          f.elements.semester.value = c.semester;
+          f.elements.department_id.value = c.department_id ?? '';
+          f.elements.faculty_id.value = c.faculty_id ?? '';
+          document.getElementById('courseFormTitle').textContent = `Edit ${c.code}`;
+          document.getElementById('courseSubmit').textContent = 'Save changes';
+          document.getElementById('courseCancel').hidden = false;
+          f.scrollIntoView({ behavior: 'smooth' });
+        }
+        if (del) {
+          const c = courses.find((x) => String(x.id) === del);
+          if (!confirm(`Delete ${c.code}? All enrollments, attendance and marks for this course will also be deleted.`)) return;
+          try {
+            toast((await api('DELETE', `/api/admin/courses/${del}`)).message);
+            await Promise.all([loadCourses(), loadDepartments()]);
+          } catch (err) { toast(err.message, true); }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

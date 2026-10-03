@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Attendance & Grades - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-panel="attPanel" role="tab" aria-selected="true">Attendance</button>
+          <button class="tab" data-panel="gradePanel" role="tab" aria-selected="false">Grades</button>
+        </div>
+
+        <section class="card tab-panel" id="attPanel">
+          <p class="muted small">A minimum of 75% attendance is required in each course.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Code</th><th>Course name</th><th>Classes attended</th><th>Total classes</th><th>Attendance</th></tr></thead>
+              <tbody id="attBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card tab-panel" id="gradePanel" hidden>
+          <div class="stats"><div class="stat"><div class="label">CGPA</div><div class="value" id="cgpa">-</div></div></div>
+          <div class="table-wrap">
+            <table>
+              <thead id="gradeHead"></thead>
+              <tbody id="gradeBody"></tbody>
+            </table>
+          </div>
+          <p class="muted small">Each course grade uses the average of the marks entered so far (out of 100).
+            Scale: O 91+, A+ 81-90, A 71-80, B+ 61-70, B 56-60, C 50-55, U below 50 (fail).
+            CGPA is the credit-weighted average of grade points.</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    (async () => {
+      await initPage('student', 'Attendance & Grades');
+      setupTabs();
+      const data = await api('GET', '/api/student/records');
+
+      const att = document.getElementById('attBody');
+      if (data.attendance.length === 0) {
+        att.innerHTML = '<tr><td colspan="5" class="empty">No approved courses yet. Attendance appears after a faculty member approves your enrollment.</td></tr>';
+      } else {
+        att.innerHTML = data.attendance.map((a) => {
+          let pct = '<span class="muted">No classes yet</span>';
+          if (a.total > 0) {
+            const p = Math.round((a.present * 100) / a.total);
+            pct = `<span class="badge ${p >= 75 ? 'badge-good' : 'badge-low'}">${p}%</span>`;
+          }
+          return `<tr><td><strong>${esc(a.code)}</strong></td><td>${esc(a.name)}</td><td>${a.present}</td><td>${a.total}</td><td>${pct}</td></tr>`;
+        }).join('');
+      }
+
+      const r = data.results;
+      document.getElementById('cgpa').textContent = r.cgpa === null ? 'No marks yet' : r.cgpa;
+      if (r.cgpa === null) document.getElementById('cgpa').classList.add('small');
+      document.getElementById('gradeHead').innerHTML = '<tr><th>Code</th><th>Course name</th><th>Credits</th>' +
+        r.examTypes.map((t) => `<th>${esc(t)}</th>`).join('') + '<th>Average</th><th>Grade</th><th>Result</th></tr>';
+      const cols = 6 + r.examTypes.length;
+      const gb = document.getElementById('gradeBody');
+      if (r.courses.length === 0) {
+        gb.innerHTML = `<tr><td colspan="${cols}" class="empty">No approved courses yet.</td></tr>`;
+      } else {
+        gb.innerHTML = r.courses.map((c) => `<tr>
+          <td><strong>${esc(c.code)}</strong></td><td>${esc(c.name)}</td><td>${c.credits}</td>
+          ${r.examTypes.map((t) => `<td>${c.marks[t] ?? '<span class="muted">-</span>'}</td>`).join('')}
+          <td>${c.average ?? '<span class="muted">-</span>'}</td>
+          <td>${c.grade ? `<strong>${esc(c.grade)}</strong>` : '<span class="muted">-</span>'}</td>
+          <td>${c.result ? badge(c.result.toLowerCase()) : '<span class="muted">Not graded</span>'}</td></tr>`).join('');
+      }
+    })();
+  </script>
+</body>
+</html>

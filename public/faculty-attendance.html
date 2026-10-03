@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mark Attendance - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <section class="card">
+          <form class="toolbar" id="pickForm">
+            <div class="field"><label for="course">Course</label><select id="course" required></select></div>
+            <div class="field"><label for="date">Date</label><input type="date" id="date" required></div>
+            <button class="btn btn-primary" type="submit">Load students</button>
+          </form>
+          <div id="sheet"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    let loaded = null; // { courseId, date, students }
+
+    function renderSheet() {
+      const sheet = document.getElementById('sheet');
+      const { students } = loaded;
+      if (students.length === 0) {
+        sheet.innerHTML = '<p class="empty">No approved students in this course yet. Approve enrollment requests on your dashboard first.</p>';
+        return;
+      }
+      const alreadySaved = students.some((s) => s.status);
+      sheet.innerHTML = `
+        <p class="muted small">${alreadySaved ? 'Attendance was already saved for this date. You can change it and save again.' : 'New attendance sheet. Everyone is marked present by default.'}</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Name</th><th>Email</th><th>Attendance</th></tr></thead>
+          <tbody>${students.map((s) => {
+            const st = s.status || 'present';
+            return `<tr><td>${esc(s.name)}</td><td>${esc(s.email)}</td><td><div class="radio-group">
+              <label><input type="radio" name="st-${s.id}" value="present" ${st === 'present' ? 'checked' : ''}> Present</label>
+              <label><input type="radio" name="st-${s.id}" value="absent" ${st === 'absent' ? 'checked' : ''}> Absent</label>
+            </div></td></tr>`;
+          }).join('')}</tbody>
+        </table></div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" id="allPresent" type="button">Mark all present</button>
+          <button class="btn btn-primary" id="saveBtn" type="button">Save attendance</button>
+        </div>`;
+
+      document.getElementById('allPresent').addEventListener('click', () => {
+        sheet.querySelectorAll('input[value="present"]').forEach((r) => { r.checked = true; });
+      });
+      document.getElementById('saveBtn').addEventListener('click', async () => {
+        const records = students.map((s) => ({
+          student_id: s.id,
+          status: sheet.querySelector(`input[name="st-${s.id}"]:checked`).value,
+        }));
+        try {
+          const res = await api('POST', `/api/faculty/courses/${loaded.courseId}/attendance`, { date: loaded.date, records });
+          records.forEach((r) => { students.find((s) => s.id === r.student_id).status = r.status; });
+          renderSheet();
+          toast(res.message);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+
+    (async () => {
+      await initPage('faculty', 'Mark Attendance');
+      const courses = await api('GET', '/api/faculty/courses');
+      const select = document.getElementById('course');
+      if (courses.length === 0) {
+        document.getElementById('pickForm').innerHTML = '<p class="empty">No courses are assigned to you yet.</p>';
+        return;
+      }
+      fillSelect(select, courses.map((c) => ({ id: c.id, name: `${c.code} - ${c.name}` })));
+      document.getElementById('date').value = todayISO();
+
+      document.getElementById('pickForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const courseId = select.value;
+        const date = document.getElementById('date').value;
+        try {
+          const students = await api('GET', `/api/faculty/courses/${courseId}/attendance?date=${encodeURIComponent(date)}`);
+          loaded = { courseId, date, students };
+          renderSheet();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

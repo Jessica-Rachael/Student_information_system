@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Enter Grades - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <section class="card">
+          <form class="toolbar" id="pickForm">
+            <div class="field"><label for="course">Course</label><select id="course" required></select></div>
+            <div class="field"><label for="exam">Exam</label>
+              <select id="exam" required>
+                <option>Internal 1</option><option>Internal 2</option><option>Final</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" type="submit">Load students</button>
+          </form>
+          <div id="sheet"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    let loaded = null; // { courseId, exam, students }
+
+    function renderSheet() {
+      const sheet = document.getElementById('sheet');
+      const { students, exam } = loaded;
+      if (students.length === 0) {
+        sheet.innerHTML = '<p class="empty">No approved students in this course yet. Approve enrollment requests on your dashboard first.</p>';
+        return;
+      }
+      sheet.innerHTML = `
+        <p class="muted small">Enter ${esc(exam)} marks out of 100. Leave a box empty if the mark is not available yet.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Name</th><th>Email</th><th>Marks (0-100)</th></tr></thead>
+          <tbody>${students.map((s) => `<tr><td>${esc(s.name)}</td><td>${esc(s.email)}</td>
+            <td><input class="marks-input" type="number" min="0" max="100" step="0.5" data-student="${s.id}"
+              value="${s.marks ?? ''}" aria-label="Marks for ${esc(s.name)}"></td></tr>`).join('')}</tbody>
+        </table></div>
+        <div class="form-actions"><button class="btn btn-primary" id="saveBtn" type="button">Save marks</button></div>`;
+
+      document.getElementById('saveBtn').addEventListener('click', async () => {
+        const inputs = [...sheet.querySelectorAll('.marks-input')];
+        const bad = inputs.find((i) => i.value !== '' && (Number(i.value) < 0 || Number(i.value) > 100));
+        if (bad) {
+          bad.focus();
+          return toast('Marks must be between 0 and 100.', true);
+        }
+        const records = inputs.map((i) => ({ student_id: Number(i.dataset.student), marks: i.value }));
+        try {
+          const res = await api('POST', `/api/faculty/courses/${loaded.courseId}/grades`, { exam_type: exam, records });
+          toast(res.message);
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    }
+
+    (async () => {
+      await initPage('faculty', 'Enter Grades');
+      const courses = await api('GET', '/api/faculty/courses');
+      const select = document.getElementById('course');
+      if (courses.length === 0) {
+        document.getElementById('pickForm').innerHTML = '<p class="empty">No courses are assigned to you yet.</p>';
+        return;
+      }
+      fillSelect(select, courses.map((c) => ({ id: c.id, name: `${c.code} - ${c.name}` })));
+
+      document.getElementById('pickForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const courseId = select.value;
+        const exam = document.getElementById('exam').value;
+        try {
+          const students = await api('GET', `/api/faculty/courses/${courseId}/grades?exam=${encodeURIComponent(exam)}`);
+          loaded = { courseId, exam, students };
+          renderSheet();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create an account - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="auth-page">
+    <main class="auth-card wide">
+      <h1>Create an account</h1>
+      <p class="sub">Choose your role and fill in your details.</p>
+      <div class="error-msg" id="error" role="alert"></div>
+      <form id="registerForm">
+        <div class="form-grid">
+          <div class="field">
+            <label for="role">I am a</label>
+            <select id="role" name="role" required>
+              <option value="student">Student</option>
+              <option value="faculty">Faculty</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="name">Full name</label>
+            <input id="name" name="name" required>
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required>
+          </div>
+          <div class="field">
+            <label for="phone">Phone</label>
+            <input type="tel" id="phone" name="phone">
+          </div>
+          <div class="field">
+            <label for="department_id">Department</label>
+            <select id="department_id" name="department_id"></select>
+          </div>
+          <div class="field student-only">
+            <label for="dob">Date of birth</label>
+            <input type="date" id="dob" name="dob">
+          </div>
+          <div class="field student-only">
+            <label for="program">Program</label>
+            <input id="program" name="program" placeholder="For example, B.Tech IT">
+          </div>
+          <div class="field">
+            <label for="password">Password (at least 6 characters)</label>
+            <input type="password" id="password" name="password" required minlength="6">
+          </div>
+          <div class="field">
+            <label for="confirm">Confirm password</label>
+            <input type="password" id="confirm" name="confirm" required minlength="6">
+          </div>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit" id="submitBtn">Create student account</button></div>
+      </form>
+      <p class="switch">Already have an account? <a href="/index.html">Log in</a></p>
+    </main>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    const roleSelect = document.getElementById('role');
+
+    // Show student-only fields (date of birth, program) only when Student is selected.
+    function updateForRole() {
+      const role = roleSelect.value;
+      document.querySelectorAll('.student-only').forEach((el) => { el.hidden = role !== 'student'; });
+      document.getElementById('submitBtn').textContent = `Create ${ROLE_LABEL[role].toLowerCase()} account`;
+    }
+    roleSelect.addEventListener('change', updateForRole);
+    updateForRole();
+
+    (async () => {
+      const depts = await fetch('/api/departments').then((r) => r.json());
+      fillSelect(document.getElementById('department_id'), depts,
+        depts.length ? 'Select your department' : 'No departments added yet');
+    })();
+
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('error');
+      const data = formData(e.target);
+      errorEl.textContent = '';
+      if (data.password !== data.confirm) return (errorEl.textContent = 'Passwords do not match.');
+      try {
+        const res = await api('POST', '/api/register', data);
+        location.href = HOME[res.role]; // opens the dashboard for the chosen role
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

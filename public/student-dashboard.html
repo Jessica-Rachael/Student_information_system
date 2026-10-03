@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <p id="welcome" class="muted"></p>
+        <div class="stats">
+          <div class="stat"><div class="label">Enrolled courses</div><div class="value" id="sApproved">-</div></div>
+          <div class="stat"><div class="label">Pending requests</div><div class="value" id="sPending">-</div></div>
+          <div class="stat"><div class="label">Attendance</div><div class="value" id="sAttendance">-</div></div>
+          <div class="stat"><div class="label">CGPA</div><div class="value" id="sCgpa">-</div></div>
+        </div>
+        <div id="getStarted"></div>
+        <section class="card" id="notifications">
+          <div class="card-head">
+            <h2>Notifications</h2>
+            <button class="btn btn-secondary btn-sm" id="readAll">Mark all as read</button>
+          </div>
+          <ul class="list" id="notifList"></ul>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    (async () => {
+      const me = await initPage('student', 'Dashboard');
+      document.getElementById('welcome').textContent = `Welcome, ${me.name}.`;
+
+      const d = await api('GET', '/api/student/dashboard');
+      document.getElementById('sApproved').textContent = d.approved;
+      document.getElementById('sPending').textContent = d.pending;
+      document.getElementById('sAttendance').textContent = d.attendancePercent === null ? 'No classes yet' : d.attendancePercent + '%';
+      document.getElementById('sCgpa').textContent = d.cgpa === null ? 'No marks yet' : d.cgpa;
+      if (d.attendancePercent === null) document.getElementById('sAttendance').classList.add('small');
+      if (d.cgpa === null) document.getElementById('sCgpa').classList.add('small');
+
+      if (d.approved === 0 && d.pending === 0) {
+        document.getElementById('getStarted').innerHTML =
+          '<div class="notice">You are not enrolled in any course yet. <a href="/student-courses.html">Browse courses and enroll</a>.</div>';
+      }
+
+      const list = document.getElementById('notifList');
+      await loadNotifications(list, 'No notifications yet. You will see updates about enrollments and marks here.');
+      document.getElementById('readAll').addEventListener('click', async () => {
+        await api('POST', '/api/notifications/read-all');
+        location.reload();
+      });
+    })();
+  </script>
+</body>
+</html>

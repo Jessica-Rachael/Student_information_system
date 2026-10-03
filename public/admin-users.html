@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manage Users - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <section class="card">
+          <h2>Add a user</h2>
+          <div class="error-msg" id="error" role="alert"></div>
+          <form id="userForm">
+            <div class="form-grid">
+              <div class="field"><label for="role">Role</label>
+                <select id="role" name="role">
+                  <option value="student">Student</option>
+                  <option value="faculty">Faculty</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+              <div class="field"><label for="name">Full name</label><input id="name" name="name" required></div>
+              <div class="field"><label for="email">Email</label><input type="email" id="email" name="email" required></div>
+              <div class="field"><label for="phone">Phone</label><input type="tel" id="phone" name="phone"></div>
+              <div class="field"><label for="department_id">Department</label><select id="department_id" name="department_id"></select></div>
+              <div class="field" id="programField"><label for="program">Program</label><input id="program" name="program"></div>
+              <div class="field"><label for="password">Temporary password (at least 6 characters)</label><input type="password" id="password" name="password" required minlength="6"></div>
+            </div>
+            <div class="form-actions"><button class="btn btn-primary" type="submit">Add user</button></div>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="tabs" role="tablist" id="roleTabs">
+            <button class="tab active" data-role="student" role="tab" aria-selected="true">Students</button>
+            <button class="tab" data-role="faculty" role="tab" aria-selected="false">Faculty</button>
+            <button class="tab" data-role="admin" role="tab" aria-selected="false">Administrators</button>
+          </div>
+          <div class="toolbar"><div class="field"><label for="search">Search</label><input id="search" placeholder="Name or email"></div></div>
+          <div class="table-wrap">
+            <table>
+              <thead id="usersHead"></thead>
+              <tbody id="usersBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    let me;
+    let currentRole = 'student';
+    let users = [];
+
+    function render() {
+      const q = document.getElementById('search').value.trim().toLowerCase();
+      const rows = users.filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+      const isStudent = currentRole === 'student';
+      document.getElementById('usersHead').innerHTML = `<tr><th>Name</th><th>Email</th><th>Phone</th><th>Department</th>
+        ${isStudent ? '<th>Program</th>' : ''}<th>Joined</th><th></th></tr>`;
+      const cols = isStudent ? 7 : 6;
+      const body = document.getElementById('usersBody');
+      if (rows.length === 0) {
+        body.innerHTML = `<tr><td colspan="${cols}" class="empty">${users.length === 0 ? 'No accounts in this group yet.' : 'No users match your search.'}</td></tr>`;
+        return;
+      }
+      body.innerHTML = rows.map((u) => `<tr>
+        <td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.phone) || '-'}</td><td>${esc(u.department) || '-'}</td>
+        ${isStudent ? `<td>${esc(u.program) || '-'}</td>` : ''}<td>${fmtDateTime(u.created_at)}</td>
+        <td class="actions">${u.id === me.id ? '<span class="muted small">You</span>'
+          : `<button class="btn btn-danger btn-sm" data-delete="${u.id}" data-name="${esc(u.name)}">Delete</button>`}</td></tr>`).join('');
+    }
+
+    async function loadUsers() {
+      users = await api('GET', `/api/admin/users?role=${currentRole}`);
+      render();
+    }
+
+    (async () => {
+      me = await initPage('admin', 'Manage Users');
+      const depts = await api('GET', '/api/departments');
+      fillSelect(document.getElementById('department_id'), depts, depts.length ? 'Not selected' : 'No departments added yet');
+      await loadUsers();
+
+      document.querySelectorAll('#roleTabs .tab').forEach((tab) => {
+        tab.addEventListener('click', async () => {
+          document.querySelectorAll('#roleTabs .tab').forEach((t) => {
+            t.classList.toggle('active', t === tab);
+            t.setAttribute('aria-selected', t === tab);
+          });
+          currentRole = tab.dataset.role;
+          document.getElementById('role').value = currentRole;
+          document.getElementById('programField').hidden = currentRole !== 'student';
+          await loadUsers();
+        });
+      });
+      document.getElementById('role').addEventListener('change', (e) => {
+        document.getElementById('programField').hidden = e.target.value !== 'student';
+      });
+      document.getElementById('search').addEventListener('input', render);
+
+      document.getElementById('userForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        document.getElementById('error').textContent = '';
+        try {
+          const res = await api('POST', '/api/admin/users', formData(e.target));
+          toast(res.message);
+          const role = document.getElementById('role').value;
+          e.target.reset();
+          document.getElementById('role').value = role;
+          document.querySelector(`#roleTabs .tab[data-role="${role}"]`).click();
+        } catch (err) {
+          document.getElementById('error').textContent = err.message;
+        }
+      });
+
+      document.getElementById('usersBody').addEventListener('click', async (e) => {
+        const id = e.target.dataset.delete;
+        if (!id) return;
+        if (!confirm(`Delete ${e.target.dataset.name}? Their enrollments, attendance and marks will also be deleted.`)) return;
+        try {
+          const res = await api('DELETE', `/api/admin/users/${id}`);
+          toast(res.message);
+          await loadUsers();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

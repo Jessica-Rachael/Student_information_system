@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="auth-page">
+    <main class="auth-card">
+      <h1>Student Information System</h1>
+      <p class="sub">Log in to your account</p>
+      <div class="error-msg" id="error" role="alert"></div>
+      <form id="loginForm">
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary" type="submit">Log in</button>
+      </form>
+      <p class="switch">New here? <a href="/register.html">Create an account</a></p>
+    </main>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    // If already logged in, go straight to the dashboard for that role.
+    (async () => {
+      const session = await fetch('/api/session').then((r) => r.json());
+      if (session.user) location.href = HOME[session.user.role];
+    })();
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('error');
+      errorEl.textContent = '';
+      try {
+        const res = await api('POST', '/api/login', formData(e.target));
+        location.href = HOME[res.role];
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

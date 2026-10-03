@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard - Student Information System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside id="sidebar"></aside>
+    <div class="main">
+      <header id="topbar"></header>
+      <main class="content">
+        <div class="stats">
+          <div class="stat"><div class="label">Students</div><div class="value" id="sStudents">-</div></div>
+          <div class="stat"><div class="label">Faculty</div><div class="value" id="sFaculty">-</div></div>
+          <div class="stat"><div class="label">Departments</div><div class="value" id="sDepts">-</div></div>
+          <div class="stat"><div class="label">Courses</div><div class="value" id="sCourses">-</div></div>
+          <div class="stat"><div class="label">Pending enrollments</div><div class="value" id="sPending">-</div></div>
+        </div>
+        <div id="setupGuide"></div>
+        <section class="card">
+          <h2>Recent enrollment activity</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Student</th><th>Course</th><th>Requested on</th><th>Status</th></tr></thead>
+              <tbody id="recentBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+    (async () => {
+      await initPage('admin', 'Admin Dashboard');
+      const d = await api('GET', '/api/admin/dashboard');
+      document.getElementById('sStudents').textContent = d.students;
+      document.getElementById('sFaculty').textContent = d.faculty;
+      document.getElementById('sDepts').textContent = d.departments;
+      document.getElementById('sCourses').textContent = d.courses;
+      document.getElementById('sPending').textContent = d.pending;
+
+      if (d.departments === 0 || d.faculty === 0 || d.courses === 0) {
+        const step = (done, text) => `<li>${done ? '<s>' + text + '</s> (done)' : text}</li>`;
+        document.getElementById('setupGuide').innerHTML = `
+          <div class="notice"><strong>Set up the system in this order:</strong>
+            <ol>
+              ${step(d.departments > 0, '<a href="/admin-academics.html">Add departments</a>')}
+              ${step(d.faculty > 0, '<a href="/admin-users.html">Add faculty accounts</a>')}
+              ${step(d.courses > 0, '<a href="/admin-academics.html">Add courses and assign a faculty member to each</a>')}
+            </ol>
+            After that, students can register and enroll in courses.
+          </div>`;
+      }
+
+      document.getElementById('recentBody').innerHTML = d.recent.length === 0
+        ? '<tr><td colspan="4" class="empty">No enrollment activity yet.</td></tr>'
+        : d.recent.map((r) => `<tr><td>${esc(r.student)}</td><td><strong>${esc(r.code)}</strong> ${esc(r.course)}</td>
+            <td>${fmtDateTime(r.enrolled_at)}</td><td>${badge(r.status)}</td></tr>`).join('');
+    })();
+  </script>
+</body>
+</html>
